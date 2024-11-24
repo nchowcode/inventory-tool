@@ -7,8 +7,10 @@ dist/
 .credentials/
 credentials.json
 service-account.json
-credentials/client_secret.json
-credentials/token.json
-credentials/firebase-web.json
 package.json
+
 credentials/firebaseConfig.ts
+
+src/config/firebaseConfig.ts
+src/credentials
+functions/src/credentials
