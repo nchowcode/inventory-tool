@@ -11,3 +11,4 @@ credentials/client_secret.json
 credentials/token.json
 credentials/firebase-web.json
 package.json
+credentials/firebaseConfig.ts
