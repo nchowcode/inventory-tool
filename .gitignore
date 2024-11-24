@@ -4,4 +4,6 @@ dist/
 .DS_Store
 *.log
 .firebase/
+.credentials/
 credentials.json
+service-account.json

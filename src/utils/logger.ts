@@ -10,5 +10,8 @@ export const logger = {
     },
     debug: (...args: any[]) => {
       console.debug(new Date().toISOString(), '[DEBUG]', ...args);
-    }
+    },
+    success: (...args: any[]) => {
+        console.debug(new Date().toISOString(), '[SUCCESS]', ...args);
+      }
   };

@@ -2,6 +2,7 @@ import { HttpFunction } from '@google-cloud/functions-framework/build/src/functi
 import { logger } from './utils/logger';
 import { EmailParser } from './email/parser';
 import { WhitelistConfig } from './email/types';
+import { Database } from './config/firebase';
 
 const whitelist: WhitelistConfig = {
   subjects: ['order', 'confirmation', 'invoice'],
@@ -10,29 +11,27 @@ const whitelist: WhitelistConfig = {
   keywords: ['order', 'purchase', 'confirmation']
 };
 
-const emailParser = new EmailParser(whitelist);
+const db = new Database();
+const parser = new EmailParser();
 
 export const processEmail: HttpFunction = async (req, res) => {
   try {
-    logger.info('Received webhook request');
+    // Parse the email
+    const parsedEmail = await parser.parseEmail(req.body);
 
-    if (!req.body) {
-      logger.warn('No request body received');
-      return res.status(400).send({ error: 'No request body' });
+    // Store in Firestore
+    const emailId = await db.storeEmail(parsedEmail);
+
+    // If there are inventory items, update them
+    if (parsedEmail.parsedData?.items?.length > 0) {
+      await db.updateInventory(parsedEmail.parsedData.items);
     }
-    const parsedEmail = await emailParser.parseEmail(req.body);
-    logger.info('Successfully processed email');
 
-    res.status(200).send({
-      success: true,
-      data: parsedEmail
-    });
+    logger.info('Successfully processed email:', emailId);
+    res.status(200).send({ success: true, emailId });
 
   } catch (error) {
-    logger.error('Error processing webhook:', error);
-    res.status(500).send({ 
-      success: false, 
-      error: error instanceof Error ? error.message : 'Unknown error'
-    });
+    logger.error('Failed to process email:', error);
+    res.status(500).send({ error: 'Failed to process email' });
   }
 };

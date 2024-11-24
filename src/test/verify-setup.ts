@@ -1,44 +1,90 @@
-import { getGmailClient } from '../config/gmail';
-import { setupPubSub } from '../config/pubsub';
+import { gmailService } from '../config/gmail';
+import { pubsubService } from '../config/pubsub';
+import { logger } from '../utils/logger';
+
+// Define message type for type safety
+interface PubSubMessage {
+  id: string;
+  data: Buffer;
+  ack(): void;
+  nack(): void;
+}
 
 async function verifySetup() {
   try {
-    console.log('Testing Gmail connection...');
-    const gmail = await getGmailClient();
-    const profile = await gmail.users.getProfile({ userId: 'me' });
-    console.log('Successfully connected to Gmail as:', profile.data.emailAddress);
+    logger.info('Starting setup verification...');
 
-    console.log('\nTesting Pub/Sub setup...');
-    const { topic, subscription } = await setupPubSub();
-    
-    // Test publishing a message
-    const testMessage = Buffer.from(JSON.stringify({
-      test: true,
-      timestamp: new Date().toISOString()
-    }));
-    
-    const messageId = await topic.publish(testMessage);
-    console.log('Published test message:', messageId);
-
-    // Listen for the message
-    console.log('Listening for test message...');
-    subscription.on('message', message => {
-      console.log('Received message:', message.id);
-      console.log('Data:', message.data.toString());
-      message.ack();
-      process.exit(0);
+    // Test Gmail connection
+    logger.info('Testing Gmail connection...');
+    const labels = await gmailService.listLabels();
+    logger.info('Gmail connection successful', {
+      labelCount: labels?.length || 0
     });
 
-    // Set timeout
-    setTimeout(() => {
-      console.log('No message received after 10s');
-      process.exit(1);
-    }, 10000);
+    // Test PubSub setup
+    logger.info('Testing PubSub setup...');
+    const { topic, subscription } = await pubsubService.setup();
+    
+    // Test message publishing and receiving
+    logger.info('Testing PubSub message flow...');
+    
+    // Create a promise that resolves when we receive the message
+    const messageReceived = new Promise<void>((resolve) => {
+      pubsubService.listenForMessages(async (data) => {
+        logger.info('Received test message:', data);
+        resolve();
+      });
+    });
+
+    // Publish a test message
+    const testMessage = {
+      type: 'TEST_MESSAGE',
+      timestamp: new Date().toISOString(),
+      data: {
+        test: true,
+        message: 'Setup verification test'
+      }
+    };
+
+    const messageId = await pubsubService.publishMessage(testMessage);
+    logger.info('Published test message:', messageId);
+
+    // Wait for message to be received (with timeout)
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Message receive timeout')), 10000);
+    });
+
+    await Promise.race([messageReceived, timeout]);
+    
+    logger.info('Setup verification completed successfully');
+    return true;
 
   } catch (error) {
-    console.error('Setup verification failed:', error);
-    process.exit(1);
+    if (error instanceof Error) {
+      logger.error('Setup verification failed:', error.message);
+      if ('code' in error) {
+        logger.error('Error code:', (error as any).code);
+      }
+    } else {
+      logger.error('Unknown error during verification');
+    }
+    throw error;
   }
 }
 
-verifySetup();
+// Run verification
+if (require.main === module) {
+  verifySetup()
+    .then(() => {
+      logger.info('All verifications passed!');
+      process.exit(0);
+    })
+    .catch((error) => {
+      logger.error('Verification failed:', 
+        error instanceof Error ? error.message : 'Unknown error'
+      );
+      process.exit(1);
+    });
+}
+
+export { verifySetup };
