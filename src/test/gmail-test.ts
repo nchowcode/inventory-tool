@@ -31,7 +31,7 @@ async function testOrderEmails() {
       console.log('From:', email.from);
       console.log('Subject:', email.subject);
       console.log('Date:', email.date);
-      console.log('Preview:', email.body.substring(0, 150) + '...');
+      console.log('Preview:', email.body);
       console.log('==================\n');
     }
 

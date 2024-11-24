@@ -1,140 +1,117 @@
 import { google } from 'googleapis';
-import { OAuth2Client } from 'google-auth-library';
-import * as path from 'path';
-import * as fs from 'fs';
+import { AuthService } from '../auth/auth-service';
 import { logger } from '../utils/logger';
 
-// Path to credentials file
-const CREDENTIALS_PATH = path.join(process.cwd(), 'client_secret.json');
+interface EmailData {
+  id: string;
+  threadId: string;
+  from: string;
+  subject: string;
+  date: string;
+  body: string;
+  rawPayload?: any;
+}
 
-// Scopes we need for Gmail
-const SCOPES = [
-  'https://www.googleapis.com/auth/gmail.readonly',
-  'https://www.googleapis.com/auth/gmail.modify',
-  'https://www.googleapis.com/auth/gmail.labels'
-];
+export class GmailService {
+  private gmail;
 
-class GmailService {
-    private oauth2Client: OAuth2Client;
-    private readonly CREDENTIALS_PATH = path.join(process.cwd(), 'credentials', 'client_secret.json');
-    private readonly TOKEN_PATH = path.join(process.cwd(), 'credentials', 'oauth_token.json');
-  
-    constructor() {
-      try {
-        if (!fs.existsSync(this.CREDENTIALS_PATH)) {
-          throw new Error('No client_secret.json found');
-        }
-  
-        const credentials = JSON.parse(fs.readFileSync(this.CREDENTIALS_PATH, 'utf-8'));
-        
-        this.oauth2Client = new OAuth2Client(
-          credentials.installed.client_id,
-          credentials.installed.client_secret,
-          credentials.installed.redirect_uris[0]
-        );
-  
-        // Load token if exists
-        if (fs.existsSync(this.TOKEN_PATH)) {
-          const token = JSON.parse(fs.readFileSync(this.TOKEN_PATH, 'utf-8'));
-          this.oauth2Client.setCredentials(token);
-        } else {
-          throw new Error('No OAuth token found. Please run: npx ts-node src/auth/auth-service.ts');
-        }
-  
-        logger.info('Gmail service initialized successfully');
-      } catch (error) {
-        logger.error('Failed to initialize Gmail service:', error);
-        throw error;
-      }
-    }
-
-  async getGmailClient() {
-    try {
-      // Initialize the Gmail API client
-      const gmail = google.gmail({
-        version: 'v1',
-        auth: this.oauth2Client
-      });
-
-      return gmail;
-    } catch (error) {
-      logger.error('Error getting Gmail client:', error);
-      throw error;
-    }
+  constructor(authService: AuthService) {
+    this.gmail = google.gmail({ 
+      version: 'v1', 
+      auth: authService.getAuthClient() 
+    });
   }
-
-  async setupWatch(topicName: string) {
+  
+// limit 5 each
+  async searchEmails(query: string, maxResults: number = 5): Promise<EmailData[]> {
     try {
-      const gmail = await this.getGmailClient();
+      logger.info('Searching emails with query:', query);
       
-      const response = await gmail.users.watch({
+      const response = await this.gmail.users.messages.list({
         userId: 'me',
-        requestBody: {
-          labelIds: ['INBOX'],
-          topicName: `projects/${process.env.GOOGLE_PROJECT_ID}/topics/${topicName}`
-        }
+        q: query,
+        maxResults: maxResults
       });
 
-      logger.info('Gmail watch setup successful:', response.data);
-      return response.data;
+      if (!response.data.messages) {
+        logger.info('No emails found');
+        return [];
+      }
+
+      const emails: EmailData[] = [];
+      
+      for (const message of response.data.messages) {
+        const email = await this.getEmailById(message.id!);
+        if (email) {
+          emails.push(email);
+        }
+      }
+
+      return emails;
     } catch (error) {
-      logger.error('Failed to setup Gmail watch:', error);
+      logger.error('Error searching emails:', error);
       throw error;
     }
   }
 
-  async getEmail(messageId: string) {
+  async getEmailById(messageId: string): Promise<EmailData | null> {
     try {
-      const gmail = await this.getGmailClient();
-      
-      const response = await gmail.users.messages.get({
+      const response = await this.gmail.users.messages.get({
         userId: 'me',
         id: messageId,
         format: 'full'
       });
 
-      return response.data;
+      const headers = response.data.payload?.headers;
+      const from = headers?.find(h => h.name === 'From')?.value || '';
+      const subject = headers?.find(h => h.name === 'Subject')?.value || '';
+      const date = headers?.find(h => h.name === 'Date')?.value || '';
+      const body = this.getEmailBody(response.data.payload);
+
+      return {
+        id: response.data.id!,
+        threadId: response.data.threadId!,
+        from,
+        subject,
+        date,
+        body,
+        rawPayload: response.data.payload
+      };
     } catch (error) {
-      logger.error('Failed to get email:', error);
-      throw error;
+      logger.error(`Error fetching email ${messageId}:`, error);
+      return null;
     }
   }
 
-  async listLabels() {
-    try {
-      const gmail = await this.getGmailClient();
+  private getEmailBody(payload: any): string {
+    if (!payload) return '';
+
+    // Handle multipart messages
+    if (payload.mimeType === 'multipart/alternative' && payload.parts) {
+      // Try to find plain text version first
+      const plainText = payload.parts.find((part: any) => 
+        part.mimeType === 'text/plain'
+      );
       
-      const response = await gmail.users.labels.list({
-        userId: 'me'
-      });
+      if (plainText && plainText.body.data) {
+        return Buffer.from(plainText.body.data, 'base64').toString();
+      }
 
-      return response.data.labels;
-    } catch (error) {
-      logger.error('Failed to list labels:', error);
-      throw error;
-    }
-  }
-
-  async modifyLabels(messageId: string, addLabels: string[], removeLabels: string[] = []) {
-    try {
-      const gmail = await this.getGmailClient();
+      // Fall back to HTML version
+      const html = payload.parts.find((part: any) => 
+        part.mimeType === 'text/html'
+      );
       
-      const response = await gmail.users.messages.modify({
-        userId: 'me',
-        id: messageId,
-        requestBody: {
-          addLabelIds: addLabels,
-          removeLabelIds: removeLabels
-        }
-      });
-
-      return response.data;
-    } catch (error) {
-      logger.error('Failed to modify labels:', error);
-      throw error;
+      if (html && html.body.data) {
+        return Buffer.from(html.body.data, 'base64').toString();
+      }
     }
+
+    // Handle single part messages
+    if (payload.body && payload.body.data) {
+      return Buffer.from(payload.body.data, 'base64').toString();
+    }
+
+    return '';
   }
 }
-
-// Export a singleton instance
-export const gmailService = new GmailService();

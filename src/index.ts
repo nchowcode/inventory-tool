@@ -1,37 +1,43 @@
-import { HttpFunction } from '@google-cloud/functions-framework/build/src/functions';
-import { logger } from './utils/logger';
-import { EmailParser } from './email/parser';
-import { WhitelistConfig } from './email/types';
-import { Database } from './config/firebase';
+import { AuthService } from "./auth/auth-service";
+import { GmailService } from "./config/gmail";
+import { EmailProcessor } from "./services/email-processor";
+import { logger } from "./utils/logger";
 
-const whitelist: WhitelistConfig = {
-  subjects: ['order', 'confirmation', 'invoice'],
-  senders: ['nike@official.nike.com', 'sales@supplier.com'], // Add your vendors
-  forwarders: ['myemail@gmail.com'], // Add your forwarding email
-  keywords: ['order', 'purchase', 'confirmation']
-};
-
-const db = new Database();
-const parser = new EmailParser();
-
-export const processEmail: HttpFunction = async (req, res) => {
+async function main() {
   try {
-    // Parse the email
-    const parsedEmail = await parser.parseEmail(req.body);
+    // Initialize services
+    const authService = new AuthService();
+    await authService.ensureAuthenticated();
 
-    // Store in Firestore
-    const emailId = await db.storeEmail(parsedEmail);
+    const gmailService = new GmailService(authService);
+    const emailProcessor = new EmailProcessor(gmailService);
 
-    // If there are inventory items, update them
-    if (parsedEmail.parsedData?.items?.length > 0) {
-      await db.updateInventory(parsedEmail.parsedData.items);
-    }
+    const searchQueries = [
+      'from:auto-confirm@amazon.com subject: "Your Amazon.com order of"',
+    ];
+    const query = searchQueries[0];
+    logger.info(`Testing search with query: ${query}`);
 
-    logger.info('Successfully processed email:', emailId);
-    res.status(200).send({ success: true, emailId });
+    // Process emails and get parsed orders
+    const parsedOrders = await emailProcessor.processEmails();
 
+    // Log results
+    logger.info(`Processed ${parsedOrders.length} orders:`);
+    parsedOrders.forEach((order) => {
+      console.log("\nOrder:", {
+        orderNumber: order.orderNumber,
+        vendor: order.vendor,
+        items: order.items.map((item) => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+        })),
+      });
+    });
   } catch (error) {
-    logger.error('Failed to process email:', error);
-    res.status(500).send({ error: 'Failed to process email' });
+    logger.error("Error in main:", error);
   }
-};
+}
+
+// Run the program
+main();

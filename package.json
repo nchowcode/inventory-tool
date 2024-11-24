@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "test:auth": "ts-node src/auth/test-auth.ts",
-    "test:orders": "ts-node src/test/gmail-test.ts"
+    "test:orders": "ts-node src/test/vendor-tests/amazon-test.ts"
   },
   "dependencies": {
     "@google-cloud/firestore": "^7.1.0",
