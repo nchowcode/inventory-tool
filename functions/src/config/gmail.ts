@@ -1,6 +1,6 @@
-import { google } from 'googleapis';
-import { AuthService } from '../auth/auth-service';
-import { logger } from '../utils/logger';
+import { google } from "googleapis";
+import { AuthService } from "../auth/auth-service.js";
+import { logger } from "../utils/logger.js";
 
 interface EmailData {
   id: string;
@@ -16,30 +16,33 @@ export class GmailService {
   private gmail;
 
   constructor(authService: AuthService) {
-    this.gmail = google.gmail({ 
-      version: 'v1', 
-      auth: authService.getAuthClient() 
+    this.gmail = google.gmail({
+      version: "v1",
+      auth: authService.getAuthClient(),
     });
   }
-  
-// limit 5 each
-  async searchEmails(query: string, maxResults: number = 5): Promise<EmailData[]> {
+
+  // limit 5 each
+  async searchEmails(
+    query: string,
+    maxResults: number = 5
+  ): Promise<EmailData[]> {
     try {
-      logger.info('Searching emails with query:', query);
-      
+      logger.info("Searching emails with query:", query);
+
       const response = await this.gmail.users.messages.list({
-        userId: 'me',
+        userId: "me",
         q: query,
-        maxResults: maxResults
+        maxResults: maxResults,
       });
 
       if (!response.data.messages) {
-        logger.info('No emails found');
+        logger.info("No emails found");
         return [];
       }
 
       const emails: EmailData[] = [];
-      
+
       for (const message of response.data.messages) {
         const email = await this.getEmailById(message.id!);
         if (email) {
@@ -49,7 +52,7 @@ export class GmailService {
 
       return emails;
     } catch (error) {
-      logger.error('Error searching emails:', error);
+      logger.error("Error searching emails:", error);
       throw error;
     }
   }
@@ -57,15 +60,15 @@ export class GmailService {
   async getEmailById(messageId: string): Promise<EmailData | null> {
     try {
       const response = await this.gmail.users.messages.get({
-        userId: 'me',
+        userId: "me",
         id: messageId,
-        format: 'full'
+        format: "full",
       });
 
       const headers = response.data.payload?.headers;
-      const from = headers?.find(h => h.name === 'From')?.value || '';
-      const subject = headers?.find(h => h.name === 'Subject')?.value || '';
-      const date = headers?.find(h => h.name === 'Date')?.value || '';
+      const from = headers?.find((h) => h.name === "From")?.value || "";
+      const subject = headers?.find((h) => h.name === "Subject")?.value || "";
+      const date = headers?.find((h) => h.name === "Date")?.value || "";
       const body = this.getEmailBody(response.data.payload);
 
       return {
@@ -75,7 +78,7 @@ export class GmailService {
         subject,
         date,
         body,
-        rawPayload: response.data.payload
+        rawPayload: response.data.payload,
       };
     } catch (error) {
       logger.error(`Error fetching email ${messageId}:`, error);
@@ -84,34 +87,34 @@ export class GmailService {
   }
 
   private getEmailBody(payload: any): string {
-    if (!payload) return '';
+    if (!payload) return "";
 
     // Handle multipart messages
-    if (payload.mimeType === 'multipart/alternative' && payload.parts) {
+    if (payload.mimeType === "multipart/alternative" && payload.parts) {
       // Try to find plain text version first
-      const plainText = payload.parts.find((part: any) => 
-        part.mimeType === 'text/plain'
+      const plainText = payload.parts.find(
+        (part: any) => part.mimeType === "text/plain"
       );
-      
+
       if (plainText && plainText.body.data) {
-        return Buffer.from(plainText.body.data, 'base64').toString();
+        return Buffer.from(plainText.body.data, "base64").toString();
       }
 
       // Fall back to HTML version
-      const html = payload.parts.find((part: any) => 
-        part.mimeType === 'text/html'
+      const html = payload.parts.find(
+        (part: any) => part.mimeType === "text/html"
       );
-      
+
       if (html && html.body.data) {
-        return Buffer.from(html.body.data, 'base64').toString();
+        return Buffer.from(html.body.data, "base64").toString();
       }
     }
 
     // Handle single part messages
     if (payload.body && payload.body.data) {
-      return Buffer.from(payload.body.data, 'base64').toString();
+      return Buffer.from(payload.body.data, "base64").toString();
     }
 
-    return '';
+    return "";
   }
 }

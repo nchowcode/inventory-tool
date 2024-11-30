@@ -1,6 +1,6 @@
 import { google } from "googleapis";
-import { AuthService } from "../auth/auth-service";
-import { logger } from "../utils/logger";
+import { AuthService } from "../auth/auth-service.js";
+import { logger } from "../utils/logger.js";
 
 interface EmailData {
   id: string;

@@ -1,12 +1,10 @@
 // src/index.ts
-import { EmailProcessingService } from "./services/email-processor";
-import { AuthService } from "./auth/auth-service";
-import { logger } from "./utils/logger";
-import { initFirebase } from "./config/firebase";
+import { EmailProcessingService } from "./services/email-processor.js";
+import { AuthService } from "./auth/auth-service.js";
+import { logger } from "./utils/logger.js";
+import { db } from "./config/firebase.js";
 
 // Initialize Firebase once at startup
-initFirebase();
-
 interface ProcessingResult {
   processedCount: number;
   successfulOrders: number;

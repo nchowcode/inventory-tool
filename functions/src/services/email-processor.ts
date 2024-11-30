@@ -1,10 +1,9 @@
 // src/services/email-processor.ts
-import { GmailService } from "../email/parser";
-import { DatabaseService } from "./database-service";
-import { SmartParser } from "../parsers/smart-parser";
-import { AuthService } from "../auth/auth-service";
-import { logger } from "../utils/logger";
-import { initFirebase } from "../config/firebase";
+import { GmailService } from "../email/parser.js";
+import { DatabaseService } from "./database-service.js";
+import { SmartParser } from "../parsers/smart-parser.js";
+import { AuthService } from "../auth/auth-service.js";
+import { logger } from "../utils/logger.js";
 import { OAuth2Client } from "google-auth-library";
 
 interface ProcessedEmail {
@@ -22,8 +21,6 @@ export class EmailProcessingService {
   private parser: SmartParser;
 
   constructor() {
-    // Initialize Firebase
-    initFirebase();
     this.authService = new AuthService();
     this.dbService = new DatabaseService();
     this.parser = new SmartParser();
@@ -37,6 +34,7 @@ export class EmailProcessingService {
   async initialize() {
     try {
       await this.authService.ensureAuthenticated(true);
+      logger.info("processing service authenticated");
       this.gmailService = new GmailService(this.authService);
       logger.info("Email processing service initialized");
     } catch (error) {
@@ -45,6 +43,7 @@ export class EmailProcessingService {
     }
   }
 
+  // change: allow for query to get passed in later.
   async processEmails(): Promise<ProcessedEmail[]> {
     try {
       // Use the exact same search query that works in your tests
@@ -69,14 +68,14 @@ export class EmailProcessingService {
             // Store the order details
             const orderId = await this.dbService.storeOrders(
               [orderDetails],
-              "userId"
+              this.authService.getUserId()
             );
 
             results.push({
               success: true,
               messageId: email.id,
               orderId: orderDetails.orderNumber,
-              userId: "userId",
+              userId: this.authService.getUserId(),
             });
 
             logger.info(
@@ -129,27 +128,27 @@ export class EmailProcessingService {
   }
 }
 
-// Main entry point
-if (require.main === module) {
-  logger.info("Starting email processing service...");
+// if (require.main === module) {
+//   logger.info("Starting email processing service...");
 
-  const processor = new EmailProcessingService();
-  processor
-    .initialize()
-    .then(() => {
-      logger.info("Initialized successfully, processing emails...");
-      return processor.processEmails();
-    })
-    .then((results) => {
-      logger.info("Processing completed successfully");
-      logger.info("Results:", results);
-      process.exit(0);
-    })
-    .catch((error) => {
-      logger.error("Processing failed:", error);
-      process.exit(1);
-    });
-}
-function getFirestoreInstance() {
-  throw new Error("Function not implemented.");
-}
+//   const processor = new EmailProcessingService();
+//   processor
+//     .initialize()
+//     .then(() => {
+//       logger.info("Initialized successfully, processing emails...");
+//       return processor.processEmails();
+//     })
+//     .then((results) => {
+//       logger.info("Processing completed successfully");
+//       logger.info("Results:", results);
+//       process.exit(0);
+//     })
+//     .catch((error) => {
+//       logger.error("Processing failed:", error);
+//       process.exit(1);
+//     });
+// }
+
+// function getFirestoreInstance() {
+//   throw new Error("Function not implemented.");
+// }

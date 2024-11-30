@@ -1,6 +1,6 @@
-import { AuthService } from "../../auth/auth-service";
-import { GmailService } from "../../email/parser";
-import { logger } from "../../utils/logger";
+import { AuthService } from "../../auth/auth-service.js";
+import { GmailService } from "../../email/parser.js";
+import { logger } from "../../utils/logger.js";
 import * as fs from "fs";
 import * as path from "path";
 

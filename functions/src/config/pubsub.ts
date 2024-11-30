@@ -1,6 +1,6 @@
-import { PubSub, Topic, Subscription } from '@google-cloud/pubsub';
-import * as path from 'path';
-import { logger } from '../utils/logger';
+import { PubSub, Topic, Subscription } from "@google-cloud/pubsub";
+import * as path from "path";
+import { logger } from "../utils/logger.js";
 
 // Custom error class for PubSub errors
 class PubSubError extends Error {
@@ -10,7 +10,7 @@ class PubSubError extends Error {
     public readonly details?: any
   ) {
     super(message);
-    this.name = 'PubSubError';
+    this.name = "PubSubError";
   }
 }
 
@@ -22,9 +22,9 @@ interface PubSubConfig {
 }
 
 const DEFAULT_CONFIG: PubSubConfig = {
-  topicName: 'email-notifications',
-  subscriptionName: 'email-test-sub',
-  credentials: path.join(process.cwd(), 'client_secret.json')
+  topicName: "email-notifications",
+  subscriptionName: "email-test-sub",
+  credentials: path.join(process.cwd(), "client_secret.json"),
 };
 
 export class PubSubService {
@@ -34,25 +34,23 @@ export class PubSubService {
   constructor(config: Partial<PubSubConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.pubsub = new PubSub({
-      keyFilename: this.config.credentials
+      keyFilename: this.config.credentials,
     });
   }
 
   async setup(): Promise<{ topic: Topic; subscription: Subscription }> {
     try {
-      logger.info('Setting up PubSub...');
+      logger.info("Setting up PubSub...");
       const topic = await this.getOrCreateTopic();
       const subscription = await this.getOrCreateSubscription(topic);
-      
-      logger.info('PubSub setup completed successfully');
+
+      logger.info("PubSub setup completed successfully");
       return { topic, subscription };
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('Failed to setup PubSub:', errorMessage);
-      throw new PubSubError('PubSub setup failed', 
-        (error as any)?.code, 
-        error
-      );
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      logger.error("Failed to setup PubSub:", errorMessage);
+      throw new PubSubError("PubSub setup failed", (error as any)?.code, error);
     }
   }
 
@@ -60,7 +58,7 @@ export class PubSubService {
     try {
       const topic = this.pubsub.topic(this.config.topicName);
       const [exists] = await topic.exists();
-      
+
       if (!exists) {
         logger.info(`Creating topic: ${this.config.topicName}`);
         const [newTopic] = await this.pubsub.createTopic(this.config.topicName);
@@ -83,7 +81,7 @@ export class PubSubService {
     try {
       const subscription = topic.subscription(this.config.subscriptionName);
       const [exists] = await subscription.exists();
-      
+
       if (!exists) {
         logger.info(`Creating subscription: ${this.config.subscriptionName}`);
         const [newSubscription] = await topic.createSubscription(
@@ -93,11 +91,15 @@ export class PubSubService {
         return newSubscription;
       }
 
-      logger.info(`Using existing subscription: ${this.config.subscriptionName}`);
+      logger.info(
+        `Using existing subscription: ${this.config.subscriptionName}`
+      );
       return subscription;
     } catch (error) {
       if ((error as any)?.code === 6) {
-        logger.info(`Subscription ${this.config.subscriptionName} already exists`);
+        logger.info(
+          `Subscription ${this.config.subscriptionName} already exists`
+        );
         return topic.subscription(this.config.subscriptionName);
       }
       throw error;
@@ -110,14 +112,16 @@ export class PubSubService {
       const messageId = await this.pubsub
         .topic(this.config.topicName)
         .publish(dataBuffer);
-      
+
       logger.info(`Message published successfully. ID: ${messageId}`);
       return messageId;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      logger.error('Failed to publish message:', errorMessage);
-      throw new PubSubError('Failed to publish message', 
-        (error as any)?.code, 
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      logger.error("Failed to publish message:", errorMessage);
+      throw new PubSubError(
+        "Failed to publish message",
+        (error as any)?.code,
         error
       );
     }
@@ -126,27 +130,27 @@ export class PubSubService {
   async listenForMessages(
     handleMessage: (message: any) => Promise<void>
   ): Promise<void> {
-    const subscription = this.pubsub
-      .subscription(this.config.subscriptionName);
+    const subscription = this.pubsub.subscription(this.config.subscriptionName);
 
-    subscription.on('message', async (message) => {
+    subscription.on("message", async (message) => {
       try {
-        logger.info('Received message:', message.id);
+        logger.info("Received message:", message.id);
         await handleMessage(JSON.parse(message.data.toString()));
         message.ack();
-        logger.info('Message processed successfully:', message.id);
+        logger.info("Message processed successfully:", message.id);
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        logger.error('Error processing message:', errorMessage);
+        const errorMessage =
+          error instanceof Error ? error.message : "Unknown error";
+        logger.error("Error processing message:", errorMessage);
         message.nack();
       }
     });
 
-    subscription.on('error', (error) => {
-      logger.error('Subscription error:', error);
+    subscription.on("error", (error) => {
+      logger.error("Subscription error:", error);
     });
 
-    logger.info('Started listening for messages');
+    logger.info("Started listening for messages");
   }
 }
 

@@ -1,7 +1,14 @@
 // src/services/database-service.ts
 import { initializeApp, cert } from "firebase-admin/app";
-import { getFirestore, Firestore, FieldValue } from "firebase-admin/firestore";
-import { logger } from "../utils/logger";
+import {
+  getFirestore,
+  FieldValue,
+  Firestore as adminFirestore,
+} from "firebase-admin/firestore";
+import { logger } from "../utils/logger.js";
+import { getAdminDb } from "../config/firebase.js";
+import { getAuth } from "firebase-admin/auth";
+import { getApp } from "firebase-admin/app";
 
 interface EmailData {
   messageId: string;
@@ -29,20 +36,15 @@ interface OrderDetails {
 }
 
 export class DatabaseService {
-  private db: Firestore;
+  private db: adminFirestore;
 
   constructor() {
     try {
-      this.db = getFirestore();
-      logger.info("Firestore database service initialized");
+      this.db = getAdminDb();
     } catch (error) {
       logger.error("Failed to initialize database service:", error);
       throw error;
     }
-  }
-
-  getFirestore(): Firestore {
-    return this.db;
   }
 
   async isMessageProcessed(
@@ -131,14 +133,20 @@ export class DatabaseService {
 
   async storeOrders(orders: OrderDetails[], userId: string): Promise<string> {
     const batch = this.db.batch();
-
+    console.log("here1");
     try {
+      console.log("Current Firebase App:", getApp().options);
+
+      const userRecord = await getAuth().getUser(userId);
+      console.log("reason");
+      const userEmail = userRecord.email;
+      console.log(userEmail);
       const userOrdersRef = this.db
         .collection("users")
         .doc(userId)
         .collection("orders");
       let firstOrderId = "";
-
+      console.log("here2");
       for (const order of orders) {
         const orderRef = userOrdersRef.doc(order.orderNumber);
         batch.set(
@@ -151,10 +159,25 @@ export class DatabaseService {
           },
           { merge: true }
         );
-
+        console.log("here3");
+        console.log("Debug - userId:", userId);
+        console.log("Debug - order:", order);
+        // console.log("Debug - this.db:", this.db);
         if (!firstOrderId) firstOrderId = order.orderNumber;
 
+        // error occurs here.
         // Update inventory
+        getAuth()
+          .getUserByEmail(userEmail!)
+          .then((userRecord) => {
+            // See the UserRecord reference doc for the contents of userRecord.
+            console.log(
+              `Successfully fetched user data: ${userRecord.toJSON()}`
+            );
+          })
+          .catch((error) => {
+            console.log("Error fetching user data:", error);
+          });
         for (const item of order.items) {
           const inventoryRef = this.db
             .collection("users")
@@ -180,10 +203,10 @@ export class DatabaseService {
           );
         }
       }
-
+      console.log("here4");
       await batch.commit();
+      console.log("here5");
       logger.info(`Stored ${orders.length} orders for user: ${userId}`);
-
       return firstOrderId;
     } catch (error) {
       const err = error as Error;

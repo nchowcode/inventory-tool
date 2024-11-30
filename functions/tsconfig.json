@@ -1,15 +1,17 @@
 {
   "compilerOptions": {
-    "module": "commonjs",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
     "noImplicitReturns": true,
     "noUnusedLocals": false,
-    "outDir": "dist",
+    "outDir": "./dist",
+    "rootDir": "./",
     "sourceMap": true,
     "strict": true,
-    "target": "es2018",
+    "target": "ES2020",
     "baseUrl": "./",
     "esModuleInterop": true,
-    "resolveJsonModule": true,
+    // "resolveJsonModule": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
@@ -17,6 +19,6 @@
     }
   },
   "compileOnSave": true,
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "functions/src/**/*"],
   "exclude": ["node_modules", "dist"]
 }
